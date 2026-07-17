@@ -5,6 +5,16 @@ This is the RAG backbone: every document is chunked and embedded here,
 and relevant chunks are retrieved for AI Q&A, summaries, and quizzes.
 """
 
+# Streamlit Cloud (and some other hosts) ship an old system sqlite3 that
+# ChromaDB can't use. Swap in the pysqlite3-binary wheel instead, BEFORE
+# chromadb is imported anywhere. This block must stay at the very top.
+try:
+    __import__("pysqlite3")
+    import sys
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass  # local dev on Windows/Mac usually already has a new enough sqlite3
+
 import chromadb
 from chromadb.config import Settings
 
