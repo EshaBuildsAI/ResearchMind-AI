@@ -88,6 +88,109 @@ DOCUMENT:
 LITERATURE REVIEW:"""
 
 
+def citation_answer_prompt(question: str, cited_chunks: list) -> str:
+    context = "\n\n".join(
+        f"[Source {i+1} — Page {c['page'] or 'N/A'}, confidence {c['confidence']}%]\n{c['text']}"
+        for i, c in enumerate(cited_chunks)
+    )
+    return f"""You are a research assistant. Answer the question using ONLY the sources
+below. After your answer, you do not need to repeat the citations — they will be
+shown separately. If the sources don't contain the answer, say so honestly.
+
+SOURCES:
+{context}
+
+QUESTION:
+{question}
+
+ANSWER:"""
+
+
+def planner_intent_prompt(question: str) -> str:
+    return f"""Classify the user's request into exactly ONE of these categories.
+Return ONLY the category word, nothing else.
+
+- recommendation: asking what to read/study next, related techniques or papers
+- timeline: asking how a topic evolved over time, historical development
+- innovation: asking for novel project ideas, research directions
+- research_gap: asking what's missing, limitations, future work
+- citation: asking for a specific fact with a page number / exact source
+- general_chat: anything else — general questions about the document
+
+USER REQUEST:
+{question}
+
+CATEGORY:"""
+
+
+def proposal_prompt(text: str, degree_level: str, university: str) -> str:
+    return f"""You are helping a student draft a {degree_level} final year research proposal,
+based on the uploaded document below (which may be a related paper, prior work, or
+background reading — not the proposal itself). Write an ORIGINAL proposal inspired by
+this document's topic, not a summary of the document.
+
+University: {university}
+
+Structure the proposal with these exact sections:
+1. Title
+2. Introduction
+3. Problem Statement
+4. Objectives (3-5 bullet points)
+5. Literature Review (brief, based on the document's topic)
+6. Proposed Methodology
+7. Expected Outcomes
+8. Timeline (rough phase breakdown)
+
+REFERENCE DOCUMENT:
+{text}
+
+PROPOSAL:"""
+
+
+def recommendation_prompt(document_topic: str, related_papers: str) -> str:
+    return f"""You are a research advisor. Based on the document's topic and the related
+papers found below, recommend 4-6 techniques, methods, or papers the researcher should
+look into next. For each recommendation, give a one-line reason tied to what's actually
+in the related papers below. Do not invent papers that aren't listed.
+
+DOCUMENT TOPIC:
+{document_topic}
+
+RELATED PAPERS FOUND:
+{related_papers}
+
+RECOMMENDATIONS (format: "- <name>: <one-line reason>"):"""
+
+
+def timeline_prompt(topic: str, papers_by_year: str) -> str:
+    return f"""You are a research historian. Using ONLY the papers listed below (with their
+years), build a chronological timeline showing how this topic evolved. Group by year,
+one line per key development. Do not invent papers or years not listed below.
+
+TOPIC:
+{topic}
+
+PAPERS (year, title, snippet):
+{papers_by_year}
+
+TIMELINE (format: "YEAR — <development>: <paper title>"):"""
+
+
+def innovation_prompt(research_gaps: str, related_papers: str) -> str:
+    return f"""You are a research consultant. Using the research gaps identified below AND
+the related/recent papers found online, generate 5 novel research project ideas.
+Each idea should directly address one of the gaps or build on a trend visible in the
+related papers. Rank them from most to least novel. Be specific — no generic ideas.
+
+RESEARCH GAPS IDENTIFIED:
+{research_gaps}
+
+RELATED PAPERS (recent trends):
+{related_papers}
+
+NOVEL PROJECT IDEAS (format: "1. <idea title> — <2-3 sentence description tied to a gap or trend>"):"""
+
+
 def research_gap_prompt(text: str) -> str:
     return f"""You are a research analyst. Carefully review the document below and identify:
 1. Missing topics or areas not addressed

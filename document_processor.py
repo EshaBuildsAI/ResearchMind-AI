@@ -23,6 +23,19 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     return clean_text("\n".join(text_parts))
 
 
+def extract_pdf_pages(file_bytes: bytes) -> list:
+    """Extract text from a PDF page-by-page. Returns [(page_number, text), ...],
+    1-indexed. Used by the Citation Agent so answers can point to a real page
+    number instead of just a filename."""
+    pages = []
+    with fitz.open(stream=file_bytes, filetype="pdf") as pdf_doc:
+        for i, page in enumerate(pdf_doc, start=1):
+            page_text = clean_text(page.get_text())
+            if page_text:
+                pages.append((i, page_text))
+    return pages
+
+
 def extract_text_from_docx(file_bytes: bytes) -> str:
     """Extract text from a Word (.docx) file."""
     document = docx.Document(io.BytesIO(file_bytes))
@@ -75,6 +88,10 @@ def process_document(filename: str, file_bytes: bytes) -> dict:
     """
     Dispatch to the correct extractor based on file extension.
     Returns a dict with the extracted text and basic metadata.
+    For PDFs, also includes 'pages': [(page_number, text), ...] so downstream
+    features (like the Citation Agent) can reference a real page number.
+    Other formats don't have a real page concept, so 'pages' is empty for them —
+    this is stated honestly rather than faking a page number.
     """
     extension = get_file_extension(filename)
 
@@ -94,10 +111,13 @@ def process_document(filename: str, file_bytes: bytes) -> dict:
     if not text:
         raise ValueError(f"No readable text found in '{filename}'.")
 
+    pages = extract_pdf_pages(file_bytes) if extension == "pdf" else []
+
     return {
         "filename": filename,
         "extension": extension,
         "text": text,
         "char_count": len(text),
         "word_count": len(text.split()),
+        "pages": pages,
     }

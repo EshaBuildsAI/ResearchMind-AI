@@ -1,6 +1,6 @@
 """
 ai_services.py
-All AI logic lives here. Wraps the Google Gemini API and uses prompts.py
+All AI logic lives here. Wraps the OpenAI API (gpt-4o-mini) and uses prompts.py
 for prompt construction. No UI code and no file-parsing code in this module.
 """
 
@@ -8,9 +8,9 @@ import os
 import re
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+from openai import OpenAI
 
-from constants import GEMINI_MODEL, GEMINI_API_KEY_ENV
+from constants import OPENAI_MODEL, OPENAI_API_KEY_ENV
 from prompts import (
     summary_prompt,
     chat_prompt,
@@ -19,35 +19,48 @@ from prompts import (
     research_gap_prompt,
     presentation_prompt,
     literature_review_prompt,
+    proposal_prompt,
 )
 
-_configured = False
+_client = None
 
 # Load variables from a .env file (if present) into the environment.
-# This must happen before _configure() reads GEMINI_API_KEY.
+# This must happen before _get_client() reads OPENAI_API_KEY.
 load_dotenv()
 
 
-def _configure():
-    """Configure the Gemini client once, using the API key from environment variables."""
-    global _configured
-    if not _configured:
-        api_key = os.environ.get(GEMINI_API_KEY_ENV)
+def _get_client() -> OpenAI:
+    """Build the OpenAI client once. Checks environment/.env first (local dev),
+    then Streamlit secrets (Streamlit Cloud deployment)."""
+    global _client
+    if _client is None:
+        api_key = os.environ.get(OPENAI_API_KEY_ENV)
+
+        if not api_key:
+            try:
+                import streamlit as st
+                api_key = st.secrets.get(OPENAI_API_KEY_ENV)
+            except Exception:
+                pass
+
         if not api_key:
             raise EnvironmentError(
-                f"{GEMINI_API_KEY_ENV} not set. Add it to your environment "
-                f"or .streamlit/secrets.toml before using AI features."
+                f"{OPENAI_API_KEY_ENV} not set. Locally, add it to a .env file. "
+                f"On Streamlit Cloud, add it under App settings → Secrets."
             )
-        genai.configure(api_key=api_key)
-        _configured = True
+        _client = OpenAI(api_key=api_key)
+    return _client
 
 
 def _generate(prompt: str) -> str:
-    """Send a prompt to Gemini and return the plain text response."""
-    _configure()
-    model = genai.GenerativeModel(GEMINI_MODEL)
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    """Send a prompt to GPT-4o-mini and return the plain text response."""
+    client = _get_client()
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2048,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def generate_summary(text: str, length: str = "medium") -> str:
@@ -70,6 +83,23 @@ def generate_flashcards(text: str, num_cards: int = 10) -> list:
     """Returns a list of dicts: {front, back}."""
     raw = _generate(flashcard_prompt(text, num_cards))
     return _parse_flashcards(raw)
+
+
+def extract_topic(text: str) -> str:
+    """Extract a short (3-6 word) search-friendly topic from a document.
+    Used to feed Recommendation/Timeline/Innovation agents a query for
+    external paper search, instead of sending the whole document as a query."""
+    prompt = (
+        "In 3 to 6 words, state the core research topic of the document below. "
+        "Return ONLY the topic phrase, nothing else.\n\nDOCUMENT:\n"
+        f"{text[:2000]}\n\nTOPIC:"
+    )
+    topic = _generate(prompt)
+    return topic.strip().strip('"')
+
+
+def generate_proposal(text: str, degree_level: str = "BS", university: str = "") -> str:
+    return _generate(proposal_prompt(text, degree_level, university))
 
 
 def generate_literature_review(text: str) -> str:

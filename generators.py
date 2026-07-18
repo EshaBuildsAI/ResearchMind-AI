@@ -61,6 +61,27 @@ def export_research_gap_to_docx(analysis_text: str, source_filename: str) -> str
     return path
 
 
+def export_proposal_to_docx(proposal_text: str, source_filename: str) -> str:
+    """Save a generated research proposal as a Word document."""
+    document = docx.Document()
+    document.add_heading("Research Proposal", level=1)
+    document.add_paragraph(f"Based on: {source_filename}")
+    document.add_paragraph("")
+
+    for line in proposal_text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if re.match(r"^\d+\.\s", line):
+            document.add_heading(line, level=2)
+        else:
+            document.add_paragraph(line)
+
+    path = _export_path("proposal", "docx")
+    document.save(path)
+    return path
+
+
 def export_literature_review_to_docx(review_text: str, source_filename: str) -> str:
     """Save a literature review as a Word document."""
     document = docx.Document()
