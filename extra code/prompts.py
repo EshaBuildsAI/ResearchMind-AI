@@ -88,29 +88,6 @@ DOCUMENT:
 LITERATURE REVIEW:"""
 
 
-def knowledge_graph_prompt(text: str) -> str:
-    return f"""Analyze the document below and extract its key concepts and how they
-relate to each other. Return ONLY valid JSON in this exact structure, nothing else,
-no markdown code fences:
-
-{{
-  "concepts": ["Concept A", "Concept B", "Concept C"],
-  "edges": [
-    {{"from": "Concept A", "to": "Concept B", "relation": "short relation label"}}
-  ]
-}}
-
-Extract 6-12 concepts and 6-15 edges. Relation labels should be short (2-4 words,
-e.g. "builds on", "requires", "is a type of"). Only include concepts and
-relationships actually discussed in the document below — do not invent ones
-that aren't there.
-
-DOCUMENT:
-{text}
-
-JSON:"""
-
-
 def citation_answer_prompt(question: str, cited_chunks: list) -> str:
     context = "\n\n".join(
         f"[Source {i+1} — Page {c['page'] or 'N/A'}, confidence {c['confidence']}%]\n{c['text']}"

@@ -41,60 +41,26 @@ Research Gap Detection, Export Workspace (combined DOCX report)
   app restarts, unlike `st.session_state`. Deliberately simple — a file, not a
   database — and documented as such rather than oversold as a full memory system.
 
-**Reliability (added after an honest gap review):**
-- **Logging** (`logger.py`) — real timestamped logs written to `logs/app.log`,
-  covering document processing, AI calls, exports, and errors. Previously the
-  only record of activity was user-facing Streamlit messages that vanished on
-  refresh; this is an actual audit trail.
-- **Guardrails** (`guardrails.py`) — input length/emptiness validation on every
-  question, a regex-based prompt-injection pattern check (flags, logs, and
-  warns — doesn't silently block, since a false positive shouldn't stop a
-  legitimate user), and output validation (catches empty/too-short AI responses
-  before they reach the UI).
-- **Tests** (`tests/`) — 26 real pytest tests covering `utils.py`,
-  `document_processor.py`'s TXT path, and `guardrails.py`. Run with `pytest tests/`.
-  Deliberately scoped to pure functions that don't need a live API key —
-  AI-calling code isn't unit-tested here (see limitations below).
-
-**V3 additions:**
-- **Voice Assistant** (`voice_service.py`) — real speech-to-text via OpenAI
-  Whisper and text-to-speech via OpenAI TTS. Works via audio file upload
-  (record a voice memo, upload it) rather than live in-browser mic recording,
-  since the pinned Streamlit version doesn't include the newer `st.audio_input`
-  widget — stated honestly rather than implying live recording.
-- **Knowledge Graph** (`knowledge_graph_service.py`) — the AI extracts a
-  document's key concepts and relationships as structured JSON, then a real
-  graph (networkx `DiGraph`, force-directed spring layout, rendered with
-  matplotlib) is built from that data. The layout math is genuine graph
-  theory, not an AI-drawn illustration.
-
 ## 🚧 Known limitations (stated honestly, not hidden)
 - Citation confidence scores are a rough embedding-distance signal, not a
   verified accuracy measure — they should be read as "how close" not "how correct"
 - Page-level citation only works for PDF uploads (DOCX/PPTX/XLSX/TXT don't have
   a real page concept, so citations from those show "Page N/A")
 - Semantic Scholar's free, keyless tier has a shared rate limit — Recommendation,
-  Timeline, and Innovation agents fall back to OpenAlex automatically if it's
-  rate-limited, which covers most cases but isn't a 100% guarantee
+  Timeline, and Innovation agents can occasionally return "no results" if the
+  shared quota is hit. An optional `SEMANTIC_SCHOLAR_API_KEY` env var gives a
+  dedicated quota when set, but works without one too.
 - Smart Memory is a flat JSON file, not a vector-searchable memory — it's
   recency-based (last 20 entries), not relevance-based
-- Prompt-injection detection is pattern-based (regex), not semantic — it will
-  miss reworded attempts and can occasionally false-positive on legitimate
-  academic text that discusses prompt injection as a topic
-- Tests cover pure functions (utils, document text extraction, guardrails) —
-  they don't cover the AI-calling functions themselves (ai_services, agent_service),
-  since those need a live API key and network access to test meaningfully
-- Voice Assistant requires uploading an audio file, not live mic recording
-- Knowledge Graph quality depends on the AI's JSON output being well-formed;
-  a parsing fallback handles common issues (markdown fences) but malformed
-  JSON from unusual documents could still occasionally fail
 
 ## 🌍 V2 — Not built yet
-- Multi-modal processor (images, video, web pages as direct document sources)
-- Full knowledge graph *across* all uploaded documents (currently per-document only)
-- Real-time collaboration (shared workspaces) — would need a proper backend +
-  auth, which Streamlit's free tier isn't built for; better to leave unbuilt
-  than fake it with a non-functional "share" button
+- Multi-modal processor (images, audio, video, web pages — not just documents)
+- Knowledge graph across all uploaded documents
+- Voice research assistant
+- Broader live research beyond arXiv/Semantic Scholar (e.g. OpenAlex, CrossRef)
+- Collaboration features (shared workspaces)
+- Automated tests / evals (none exist yet — see project ownership notes)
+- Structured logging (currently just Streamlit UI messages + console prints)
 
 ## Why this split
 Recruiters can tell the difference between "I built 7 working agents with real

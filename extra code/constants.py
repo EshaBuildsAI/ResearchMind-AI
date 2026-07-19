@@ -43,9 +43,6 @@ CHROMA_COLLECTION_NAME = "researchmind_documents"
 # _generate() to use the Gemini block again — both configs are kept here.
 OPENAI_MODEL = "gpt-4o-mini"
 OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
-WHISPER_MODEL = "whisper-1"
-TTS_MODEL = "tts-1"
-TTS_VOICE = "alloy"
 
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
@@ -72,8 +69,6 @@ WORKSPACE_CARDS = [
     ("📈", "Timeline Agent", "Chronological view of how this topic evolved", "timeline"),
     ("💡", "Innovation Agent", "Novel project ideas from gaps + trends", "innovation"),
     ("🎓", "Proposal Agent", "Draft a BS/MS final year proposal", "proposal"),
-    ("🎙️", "Voice Assistant", "Upload a voice question, get a spoken answer", "voice"),
-    ("🕸️", "Knowledge Graph", "Visualize how concepts in this document connect", "knowledge_graph"),
     ("📤", "Export Workspace", "Download everything as one report", "export"),
 ]
 

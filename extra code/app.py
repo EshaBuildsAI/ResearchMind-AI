@@ -1,20 +1,20 @@
 """
 app.py
 ResearchMind AI — main Streamlit UI.
- 
+
 Layout: a home screen with a document upload/analyze flow and a grid of
 clickable "workspace cards" (NotebookLM-style — the whole card is a button,
 not a button sitting inside a card). Clicking a card navigates to that tool's
 page; a Back button returns to the home grid.
- 
+
 This file only handles layout/navigation — all real logic lives in
 document_processor.py, database.py, ai_services.py, agent_service.py, and
 generators.py.
 """
- 
+
 import os
 import streamlit as st
- 
+
 from constants import (
     APP_NAME, APP_ICON, APP_TAGLINE, APP_DESCRIPTION, DEVELOPER,
     SUPPORTED_FORMATS, DEFAULT_QUIZ_QUESTIONS, DEFAULT_FLASHCARDS, WORKSPACE_CARDS,
@@ -26,14 +26,10 @@ import ai_services
 import agent_service
 import memory_service
 import generators
-import voice_service
-import knowledge_graph_service
-from logger import log_action, log_error
-from guardrails import validate_question, check_for_injection_attempt
- 
+
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="wide")
- 
+
 # Load CSS relative to this file's location (fixes path issues on Windows/different CWDs)
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CSS_PATH = os.path.join(APP_DIR, "assets", "style.css")
@@ -42,7 +38,7 @@ if os.path.exists(CSS_PATH):
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 else:
     st.warning("style.css not found — running with default Streamlit theme.")
- 
+
 # ---------------- SESSION STATE ----------------
 defaults = {
     "documents": {},           # doc_id -> {filename, text, word_count}
@@ -62,21 +58,21 @@ defaults = {
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
- 
+
 if "db" not in st.session_state:
     st.session_state.db = DocumentDatabase()
- 
+
 db = st.session_state.db
- 
- 
+
+
 def go_home():
     st.session_state.view = "home"
- 
- 
+
+
 def go(view_key):
     st.session_state.view = view_key
- 
- 
+
+
 def offer_download(path: str, label: str = "⬇️ Download File"):
     """
     Read a generated file from server disk and offer it as a real browser
@@ -92,16 +88,15 @@ def offer_download(path: str, label: str = "⬇️ Download File"):
     )
     with open(path, "rb") as f:
         file_bytes = f.read()
-    log_action("file_exported", filename)
     st.download_button(label, data=file_bytes, file_name=filename, mime=mime)
- 
- 
+
+
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.markdown(f"## {APP_ICON} {APP_NAME}")
     st.caption("Intelligent Research Workspace")
     st.divider()
- 
+
     st.markdown("### 📊 Quick Statistics")
     col1, col2 = st.columns(2)
     col1.metric("Files", len(st.session_state.documents))
@@ -109,17 +104,17 @@ with st.sidebar:
     col1.metric("Reports", st.session_state.reports_generated)
     col2.metric("Quizzes", st.session_state.quizzes_generated)
     st.divider()
- 
+
     with st.expander("📁 Supported Formats"):
         st.markdown("\n".join(f"- .{fmt}" for fmt in SUPPORTED_FORMATS))
- 
+
     with st.expander("📁 Recent Documents"):
         if st.session_state.documents:
             for doc in list(st.session_state.documents.values())[-5:]:
                 st.markdown(f"- {doc['filename']}")
         else:
             st.caption("No documents yet.")
- 
+
     with st.expander("⚙️ Settings"):
         st.caption("AI Model: **gpt-4o-mini**")
         if st.button("Clear Chat History"):
@@ -133,27 +128,27 @@ with st.sidebar:
                 if key != "db":
                     del st.session_state[key]
             st.rerun()
- 
+
     with st.expander("ℹ️ About"):
         st.caption(APP_DESCRIPTION)
         st.caption(f"Developed by **{DEVELOPER}**")
- 
- 
+
+
 # =====================================================================
 # HOME VIEW — upload, analyze, workspace card grid
 # =====================================================================
 if st.session_state.view == "home":
- 
+
     st.markdown(f"""
     <div class="header-box">
         <h1>{APP_ICON} {APP_NAME}</h1>
         <p class="subtitle">{APP_TAGLINE}</p>
     </div>
     """, unsafe_allow_html=True)
- 
+
     st.markdown(f'<div class="intro-banner">{APP_DESCRIPTION}</div>', unsafe_allow_html=True)
     st.divider()
- 
+
     # ---------------- UPLOAD ----------------
     st.markdown("### 📂 Upload Documents")
     uploaded_files = st.file_uploader(
@@ -162,7 +157,7 @@ if st.session_state.view == "home":
         accept_multiple_files=True,
         label_visibility="collapsed",
     )
- 
+
     if uploaded_files:
         for file in uploaded_files:
             doc_id = file.name
@@ -176,15 +171,15 @@ if st.session_state.view == "home":
                 st.error(f"File too large: {file.name}")
                 continue
             st.session_state.pending_files[doc_id] = file_bytes
- 
+
     st.divider()
- 
+
     # ---------------- ANALYZE (with real progress steps) ----------------
     st.markdown("### 🔍 Analyze Documents")
- 
+
     if st.session_state.pending_files:
         st.caption(f"{len(st.session_state.pending_files)} document(s) ready to analyze.")
- 
+
         if st.button("Analyze Documents", type="primary"):
             with st.status("Analyzing documents...", expanded=True) as status:
                 for doc_id, file_bytes in list(st.session_state.pending_files.items()):
@@ -192,27 +187,20 @@ if st.session_state.view == "home":
                     try:
                         result = process_document(doc_id, file_bytes)
                     except Exception as e:
-                        log_error(f"Failed to process {doc_id}", e)
                         st.error(f"Failed to process {doc_id}: {e}")
                         continue
- 
-                    if check_for_injection_attempt(result["text"]):
-                        st.warning(f"⚠️ '{doc_id}' contains phrasing similar to known "
-                                  "prompt-injection patterns. Proceeding, but reviewing "
-                                  "AI outputs for this document is recommended.")
- 
+
                     st.write("🧠 Creating AI embeddings...")
                     st.write("📚 Building knowledge base...")
                     db.add_document(doc_id, doc_id, result["text"], pages=result.get("pages"))
- 
+
                     st.session_state.documents[doc_id] = {
                         "filename": doc_id,
                         "text": result["text"],
                         "word_count": result["word_count"],
                     }
                     del st.session_state.pending_files[doc_id]
-                    log_action("document_analyzed", f"{doc_id} ({result['word_count']} words)")
- 
+
                 status.update(label="✅ Analysis Complete! Your AI research assistant is ready.",
                                state="complete")
             st.rerun()
@@ -220,16 +208,16 @@ if st.session_state.view == "home":
         st.info("Upload a document above, then click Analyze to unlock the AI workspace.")
     else:
         st.success("All uploaded documents are analyzed and ready.")
- 
+
     st.divider()
- 
+
     # ---------------- ACTIVE DOCUMENT SELECTOR ----------------
     has_docs = bool(st.session_state.documents)
     if has_docs:
         doc_names = {d["filename"]: doc_id for doc_id, d in st.session_state.documents.items()}
         selected_name = st.selectbox("Active document for AI tools", list(doc_names.keys()))
         st.session_state.active_doc_id = doc_names[selected_name]
- 
+
     # ---------------- AI ASSISTANT SUGGESTIONS ----------------
     st.markdown("### ✨ AI Assistant Suggestions")
     if not has_docs:
@@ -247,9 +235,9 @@ if st.session_state.view == "home":
                 if st.button(sugg, use_container_width=True):
                     go(target)
                     st.rerun()
- 
+
     st.divider()
- 
+
     # ---------------- WORKSPACE CARD GRID ----------------
     st.markdown("### 🚀 AI Workspace")
     cards_per_row = 3
@@ -272,53 +260,43 @@ if st.session_state.view == "home":
                     if clicked:
                         go(view_key)
                         st.rerun()
- 
+
 # =====================================================================
 # TOOL VIEWS — each has a Back button + its own logic
 # =====================================================================
 else:
     doc = st.session_state.documents.get(st.session_state.active_doc_id)
- 
+
     st.markdown('<div class="back-link">', unsafe_allow_html=True)
     if st.button("← Back to Workspace"):
         go_home()
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
- 
+
     if not doc:
         st.warning("No active document selected. Go back and pick one.")
     else:
         active_text = doc["text"]
         selected_name = doc["filename"]
         active_doc_id = st.session_state.active_doc_id
- 
+
         # ---- CHAT ----
         if st.session_state.view == "chat":
             st.markdown("## 💬 Chat with AI")
             for msg in st.session_state.chat_history:
                 with st.chat_message(msg["role"]):
                     st.write(msg["content"])
- 
+
             question = st.chat_input("Ask something about this document...")
             if question:
-                is_valid, cleaned_or_error = validate_question(question)
-                if not is_valid:
-                    st.error(cleaned_or_error)
-                else:
-                    question = cleaned_or_error
-                    st.session_state.chat_history.append({"role": "user", "content": question})
-                    with st.spinner("Thinking..."):
-                        chunks = db.query(question, doc_id=active_doc_id)
-                        try:
-                            answer = ai_services.answer_question(question, chunks)
-                        except Exception as e:
-                            log_error("Chat answer generation failed", e)
-                            answer = "Something went wrong generating a response. Please try again."
-                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
-                    st.session_state.questions_asked += 1
-                    log_action("chat_question", f"doc={active_doc_id}")
-                    st.rerun()
- 
+                st.session_state.chat_history.append({"role": "user", "content": question})
+                with st.spinner("Thinking..."):
+                    chunks = db.query(question, doc_id=active_doc_id)
+                    answer = ai_services.answer_question(question, chunks)
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                st.session_state.questions_asked += 1
+                st.rerun()
+
         # ---- SUMMARY ----
         elif st.session_state.view == "summary":
             st.markdown("## 📝 Smart Summary")
@@ -335,7 +313,7 @@ else:
                     path = generators.export_summary_to_docx(summary, selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- LITERATURE REVIEW ----
         elif st.session_state.view == "literature_review":
             st.markdown("## 📚 Literature Review")
@@ -350,7 +328,7 @@ else:
                     path = generators.export_literature_review_to_docx(review, selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- FLASHCARDS ----
         elif st.session_state.view == "flashcards":
             st.markdown("## 🧠 Flashcards")
@@ -372,7 +350,7 @@ else:
                     )
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- QUIZ ----
         elif st.session_state.view == "quiz":
             st.markdown("## ❓ AI Quiz")
@@ -392,7 +370,7 @@ else:
                     path = generators.export_quiz_to_docx(st.session_state.current_quiz, selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- PRESENTATION ----
         elif st.session_state.view == "presentation":
             st.markdown("## 🎞 AI Presentation Studio")
@@ -411,31 +389,31 @@ else:
                     path = generators.export_presentation_to_pptx(slides, title=selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- PLANNER AGENT ----
         elif st.session_state.view == "planner":
             st.markdown("## 🧭 Planner Agent")
             st.caption("Ask anything about this document — the Planner classifies your "
                        "intent and automatically routes to the right agent (Recommendation, "
                        "Timeline, Innovation, Research Gap, Citation, or general Chat).")
- 
+
             for msg in st.session_state.get("planner_history", []):
                 with st.chat_message(msg["role"]):
                     st.write(msg["content"])
- 
+
             question = st.chat_input("Ask the Planner Agent...")
             if question:
                 if "planner_history" not in st.session_state:
                     st.session_state.planner_history = []
                 st.session_state.planner_history.append({"role": "user", "content": question})
- 
+
                 with st.spinner("Classifying intent → routing → generating..."):
                     topic = ai_services.extract_topic(active_text)
                     gaps = st.session_state.get(f"gaps_{active_doc_id}", "")
                     routed = agent_service.run_planner_agent(
                         db, question, active_doc_id, topic=topic, research_gaps=gaps
                     )
- 
+
                 intent = routed["intent"]
                 result = routed["result"]
                 # Each intent's result dict has a different shape — surface the right field.
@@ -445,24 +423,24 @@ else:
                     "No response generated."
                 )
                 display_text = f"*Routed to: **{intent}***\n\n{answer_text}"
- 
+
                 st.session_state.planner_history.append(
                     {"role": "assistant", "content": display_text}
                 )
                 st.session_state.questions_asked += 1
                 st.rerun()
- 
+
         # ---- CITATION AGENT ----
         elif st.session_state.view == "citation":
             st.markdown("## 📖 Citation Agent")
             st.caption("Answers with page numbers and a similarity-based confidence score. "
                        "Page numbers are only available for PDF uploads.")
- 
+
             question = st.text_input("Ask a question that needs a precise, cited answer:")
             if st.button("Get Cited Answer", type="primary") and question:
                 with st.spinner("Retrieving passages → scoring confidence → answering..."):
                     result = agent_service.run_citation_agent(db, question, active_doc_id)
- 
+
                 st.markdown(result["answer"])
                 if result["citations"]:
                     st.markdown("**Citations:**")
@@ -473,21 +451,21 @@ else:
                             st.caption(c["text"])
                 else:
                     st.info("No matching passages found for this question.")
- 
+
         # ---- PROPOSAL AGENT ----
         elif st.session_state.view == "proposal":
             st.markdown("## 🎓 Proposal Agent")
             st.caption("Drafts an original research proposal inspired by this document's topic.")
- 
+
             degree = st.selectbox("Degree level", ["BS", "MS", "PhD"])
             university = st.text_input("University name", value="University of Sindh")
- 
+
             if st.button("Generate Proposal", type="primary"):
                 with st.spinner("Drafting proposal..."):
                     st.session_state[f"proposal_{active_doc_id}"] = ai_services.generate_proposal(
                         active_text, degree, university
                     )
- 
+
             proposal = st.session_state.get(f"proposal_{active_doc_id}")
             if proposal:
                 st.markdown(proposal)
@@ -495,7 +473,7 @@ else:
                     path = generators.export_proposal_to_docx(proposal, selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- RESEARCH GAP ----
         elif st.session_state.view == "research_gap":
             st.markdown("## 🔬 Research Gap Finder")
@@ -510,35 +488,35 @@ else:
                     path = generators.export_research_gap_to_docx(gaps, selected_name)
                     st.session_state.reports_generated += 1
                     offer_download(path)
- 
+
         # ---- RESEARCH AGENT ----
         elif st.session_state.view == "agent":
             st.markdown("## 🤖 Research Agent")
             st.caption("Combines your document with live arXiv + Semantic Scholar search, "
                        "and cites every source it uses.")
- 
+
             for msg in st.session_state.agent_history:
                 with st.chat_message(msg["role"]):
                     st.write(msg["content"])
- 
+
             question = st.chat_input("Ask the Research Agent...")
             if question:
                 st.session_state.agent_history.append({"role": "user", "content": question})
                 with st.spinner("Planning → retrieving → searching → synthesizing..."):
                     result = agent_service.run_research_agent(db, question, active_doc_id)
- 
+
                 answer_with_sources = result["answer"]
                 if result["sources"]:
                     answer_with_sources += "\n\n**Sources found online:**\n"
                     for s in result["sources"]:
                         answer_with_sources += f"- [{s['source']}] [{s['title']}]({s['url']})\n"
- 
+
                 st.session_state.agent_history.append(
                     {"role": "assistant", "content": answer_with_sources}
                 )
                 st.session_state.questions_asked += 1
                 st.rerun()
- 
+
         # ---- RECOMMENDATION AGENT ----
         elif st.session_state.view == "recommendation":
             st.markdown("## ⭐ Recommendation Agent")
@@ -549,7 +527,7 @@ else:
                     topic = ai_services.extract_topic(active_text)
                     result = agent_service.run_recommendation_agent(topic)
                 st.session_state[f"reco_{active_doc_id}"] = result
- 
+
             result = st.session_state.get(f"reco_{active_doc_id}")
             if result:
                 st.markdown(result["recommendations"])
@@ -561,7 +539,7 @@ else:
                     st.caption("⚠️ Semantic Scholar returned no results — this is usually a "
                               "temporary rate limit on their free API, not a bug. Wait "
                               "10-15 seconds and click the button again.")
- 
+
         # ---- TIMELINE AGENT ----
         elif st.session_state.view == "timeline":
             st.markdown("## 📈 Timeline Agent")
@@ -572,7 +550,7 @@ else:
                     topic = ai_services.extract_topic(active_text)
                     result = agent_service.run_timeline_agent(topic)
                 st.session_state[f"timeline_{active_doc_id}"] = result
- 
+
             result = st.session_state.get(f"timeline_{active_doc_id}")
             if result:
                 st.markdown(result["timeline"])
@@ -584,13 +562,13 @@ else:
                     st.caption("⚠️ Semantic Scholar returned no results — this is usually a "
                               "temporary rate limit on their free API, not a bug. Wait "
                               "10-15 seconds and click the button again.")
- 
+
         # ---- INNOVATION AGENT ----
         elif st.session_state.view == "innovation":
             st.markdown("## 💡 Innovation Agent")
             st.caption("Combines this document's Research Gap analysis with recent trends "
                        "found online to suggest novel project ideas.")
- 
+
             gaps = st.session_state.get(f"gaps_{active_doc_id}")
             if not gaps:
                 st.info("Run Research Gap Finder first — the Innovation Agent builds on "
@@ -601,7 +579,7 @@ else:
                         topic = ai_services.extract_topic(active_text)
                         result = agent_service.run_innovation_agent(gaps, topic)
                     st.session_state[f"innovation_{active_doc_id}"] = result
- 
+
                 result = st.session_state.get(f"innovation_{active_doc_id}")
                 if result:
                     st.markdown(result["ideas"])
@@ -609,74 +587,17 @@ else:
                         with st.expander("Sources used"):
                             for s in result["sources"]:
                                 st.markdown(f"- [{s['title']}]({s['url']}) ({s.get('year', 'n.d.')})")
- 
-        # ---- VOICE ASSISTANT ----
-        elif st.session_state.view == "voice":
-            st.markdown("## 🎙️ Voice Assistant")
-            st.caption("Upload a short voice recording of your question (record a voice "
-                      "memo on your phone/laptop and upload the file — .mp3, .wav, or .m4a). "
-                      "You'll get a written answer plus a spoken response you can play back.")
- 
-            audio_file = st.file_uploader("Upload your question as audio",
-                                          type=["mp3", "wav", "m4a"], key="voice_upload")
- 
-            if audio_file and st.button("Transcribe & Answer", type="primary"):
-                try:
-                    with st.spinner("Transcribing your question..."):
-                        audio_bytes = audio_file.read()
-                        question = voice_service.transcribe_audio(audio_bytes, audio_file.name)
-                    st.markdown(f"**You asked:** {question}")
- 
-                    with st.spinner("Finding an answer..."):
-                        chunks = db.query(question, doc_id=active_doc_id)
-                        answer = ai_services.answer_question(question, chunks)
-                    st.markdown(f"**Answer:** {answer}")
- 
-                    with st.spinner("Generating spoken response..."):
-                        speech_bytes = voice_service.generate_speech(answer)
-                    st.audio(speech_bytes, format="audio/mp3")
-                    log_action("voice_question", f"doc={active_doc_id}")
- 
-                except Exception as e:
-                    log_error("Voice assistant failed", e)
-                    st.error(f"Something went wrong: {e}")
- 
-        # ---- KNOWLEDGE GRAPH ----
-        elif st.session_state.view == "knowledge_graph":
-            st.markdown("## 🕸️ Knowledge Graph")
-            st.caption("Extracts this document's key concepts and how they relate, "
-                      "then renders a real force-directed graph (not an illustration).")
- 
-            if st.button("Build Knowledge Graph", type="primary"):
-                try:
-                    with st.spinner("Extracting concepts → building graph..."):
-                        result = knowledge_graph_service.build_knowledge_graph(active_text)
-                    st.session_state[f"kg_{active_doc_id}"] = result
-                except Exception as e:
-                    log_error("Knowledge graph build failed", e)
-                    st.error(f"Couldn't build the graph: {e}")
- 
-            kg_result = st.session_state.get(f"kg_{active_doc_id}")
-            if kg_result:
-                try:
-                    st.image(kg_result["image_bytes"], use_container_width=True)
-                except TypeError:
-                    st.image(kg_result["image_bytes"])  # older Streamlit fallback
-                with st.expander(f"{len(kg_result['concepts'])} concepts, "
-                                 f"{len(kg_result['edges'])} relationships"):
-                    for edge in kg_result["edges"]:
-                        st.caption(f"{edge['from']} → *{edge.get('relation', '')}* → {edge['to']}")
- 
+
         # ---- EXPORT WORKSPACE ----
         elif st.session_state.view == "export":
             st.markdown("## 📤 Export Workspace")
             st.caption("Bundles everything generated for this document into one report.")
- 
+
             reco = st.session_state.get(f"reco_{active_doc_id}")
             timeline = st.session_state.get(f"timeline_{active_doc_id}")
             innovation = st.session_state.get(f"innovation_{active_doc_id}")
             proposal = st.session_state.get(f"proposal_{active_doc_id}")
- 
+
             sections = {
                 "Summary": st.session_state.get(f"summary_{active_doc_id}"),
                 "Literature Review": st.session_state.get(f"litreview_{active_doc_id}"),
@@ -687,7 +608,7 @@ else:
                 "Research Proposal": proposal,
             }
             available = {k: v for k, v in sections.items() if v}
- 
+
             if not available:
                 st.info("Nothing generated yet for this document — visit Summary, "
                         "Literature Review, or Research Gap first.")

@@ -1,0 +1,19 @@
+2026-07-18 23:30:33 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-18 23:32:03 | INFO | researchmind | Knowledge graph rendered: 14 concepts, 15 edges
+2026-07-18 23:39:29 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-18 23:59:15 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-19 00:23:46 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-19 00:25:52 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-19 00:32:04 | ERROR | researchmind | Knowledge graph build failed — ImportError: DLL load failed while importing _backend_agg: An Application Control policy has blocked this file.
+2026-07-19 11:19:34 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-19 11:29:15 | INFO | researchmind | Knowledge graph rendered: 14 concepts, 15 edges
+2026-07-19 11:35:38 | INFO | researchmind | ACTION: document_analyzed | CNN_Overview_Test.pdf (221 words)
+2026-07-19 11:36:49 | INFO | researchmind | ACTION: chat_question | doc=CNN_Overview_Test.pdf
+2026-07-19 11:37:06 | INFO | researchmind | ACTION: chat_question | doc=CNN_Overview_Test.pdf
+2026-07-19 11:37:26 | INFO | researchmind | ACTION: chat_question | doc=CNN_Overview_Test.pdf
+2026-07-19 11:41:36 | INFO | researchmind | ACTION: file_exported | workspace_report_20260719_114136.docx
+2026-07-19 11:46:17 | INFO | researchmind | ACTION: document_analyzed | requirements.txt (24 words)
+2026-07-19 11:46:53 | INFO | researchmind | ACTION: document_analyzed | Python_Programming_Test.docx (255 words)
+2026-07-19 11:47:28 | INFO | researchmind | ACTION: document_analyzed | workspace_report_20260718_170707.docx (25 words)
+2026-07-19 11:48:07 | INFO | researchmind | ACTION: document_analyzed | What-is-Artificial-Intelligence-AI.pptx (530 words)
+2026-07-19 11:48:37 | INFO | researchmind | ACTION: document_analyzed | The-Logic-of-Decision-and-Repetition.pptx (415 words)

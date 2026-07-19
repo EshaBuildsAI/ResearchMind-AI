@@ -12,6 +12,7 @@ not a single prompt pretending to be an agent. Only free, keyless APIs are used.
 """
 
 import os
+import re
 import time
 import xml.etree.ElementTree as ET
 from typing import TypedDict, List
@@ -61,8 +62,30 @@ class AgentState(TypedDict):
 
 # ---------------- TOOLS (free, keyless APIs) ----------------
 
+def _sanitize_search_query(query: str, max_words: int = 12) -> str:
+    """
+    Clean a query before sending it to Semantic Scholar / OpenAlex.
+
+    Both APIs treat characters like ? and * as search wildcards, not literal
+    punctuation — a normal user question like "What is CNN used for?" gets
+    rejected by OpenAlex as a malformed wildcard query. This strips anything
+    that isn't a letter, number, or basic space/hyphen, and trims overly long
+    questions down to their first N words (search engines match short keyword
+    phrases far better than full sentences anyway).
+    """
+    cleaned = re.sub(r"[^\w\s-]", " ", query)  # drop ?, *, punctuation
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    words = cleaned.split()
+    if len(words) > max_words:
+        cleaned = " ".join(words[:max_words])
+
+    return cleaned
+
+
 def search_arxiv(query: str, max_results: int = 3) -> List[dict]:
     """Tool: search arXiv for related papers. Free, no API key required."""
+    query = _sanitize_search_query(query)
     try:
         params = {"search_query": f"all:{query}", "max_results": max_results}
         response = requests.get(ARXIV_API_URL, params=params, timeout=10)
@@ -87,6 +110,7 @@ def search_openalex(query: str, max_results: int = 5) -> List[dict]:
     """Tool: search OpenAlex for related papers. Free, no API key required,
     and has a much more generous rate limit than Semantic Scholar's shared
     keyless tier — used as a fallback when Semantic Scholar is rate-limited."""
+    query = _sanitize_search_query(query)
     try:
         params = {"search": query, "per-page": max_results}
         headers = {"User-Agent": "ResearchMindAI/1.0 (educational project; mailto:researchmindai@example.com)"}
@@ -150,6 +174,7 @@ def search_semantic_scholar(query: str, max_results: int = 5, _retrying: bool = 
     """Tool: search Semantic Scholar for related papers. Free, no API key required.
     Retries once after a short delay if rate-limited, since Semantic Scholar's
     unauthenticated rate limit is shared across all users and often clears quickly."""
+    query = _sanitize_search_query(query)
     try:
         params = {"query": query, "limit": max_results, "fields": "title,abstract,url,year"}
         headers = _semantic_scholar_headers()
