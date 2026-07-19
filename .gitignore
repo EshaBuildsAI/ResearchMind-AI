@@ -1,21 +1,29 @@
 # Environment
 .env
-
+.streamlit/secrets.toml
+ 
 # Python
 __pycache__/
 *.py[cod]
-
+.pytest_cache/
+ 
 # Vector Database
 chroma_db/
-
+ 
 # Uploads & Exports
 uploads/
 exports/
-
+ 
+# Logs (added with logger.py)
+logs/
+ 
+# Persistent memory (added with memory_service.py / Smart Memory)
+memory/
+ 
 # Virtual Environment
 venv/
 .venv/
-
+ 
 # IDE
 .vscode/
 .idea/
